@@ -19,38 +19,56 @@ router.get("/questions", async (req, res) => {
 router.post("/submit", protect, async (req, res) => {
   try {
     const { answers } = req.body;
+    if (!answers || !Array.isArray(answers)) {
+      return res.status(400).json({ message: "Invalid answers data" });
+    }
+
     const student = await User.findById(req.user._id);
     const questions = await Question.find();
 
-    let score = 0;
+    if (!questions.length) {
+      return res.status(400).json({ message: "No questions found" });
+    }
 
-    // calculate score
+    let score = 0;
+    const totalQuestions = questions.length;
+
+    // ✅ Attach each question's ID to the result
     const resultAnswers = questions.map((q, index) => {
-      const isCorrect = answers[index] === q.correctAnswer;
+      const selected = answers[index];
+      const isCorrect = selected === q.correctAnswer;
       if (isCorrect) score++;
       return {
-        selectedAnswer: answers[index],
+        question: q._id,
+        selectedAnswer: selected,
         isCorrect,
       };
     });
 
-    const result = new Result({
-      student: req.user._id,
+    const percentage = Math.round((score / totalQuestions) * 100);
+
+    const newResult = new Result({
+      student: student._id,
       name: student.name,
       rollNumber: student.rollNumber,
-      answers: resultAnswers, // ❌ no question reference
+      answers: resultAnswers,
       score,
-      totalQuestions: questions.length,
-      percentage: ((score / questions.length) * 100).toFixed(2),
+      totalQuestions,
+      percentage,
     });
 
-    await result.save();
-    res.json({ message: "Test submitted", result });
+    await newResult.save();
+    res.status(201).json({
+      message: "✅ Test submitted successfully",
+      score,
+      totalQuestions,
+      percentage,
+    });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("Error submitting test:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 });
-
 
 
 // 📘 Fetch student’s test review (after submission)
