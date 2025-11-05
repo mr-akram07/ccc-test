@@ -22,20 +22,14 @@ router.post("/submit", protect, async (req, res) => {
     const student = await User.findById(req.user._id);
     const questions = await Question.find();
 
-    if (!questions.length) {
-      return res.status(400).json({ message: "No questions available" });
-    }
-
     let score = 0;
 
-    // ✅ Create answer array with linked question IDs
+    // calculate score
     const resultAnswers = questions.map((q, index) => {
-      const selected = answers[index];
-      const isCorrect = selected === q.correctAnswer;
+      const isCorrect = answers[index] === q.correctAnswer;
       if (isCorrect) score++;
       return {
-        question: q._id, // ✅ links to the actual Question
-        selectedAnswer: selected,
+        selectedAnswer: answers[index],
         isCorrect,
       };
     });
@@ -44,19 +38,19 @@ router.post("/submit", protect, async (req, res) => {
       student: req.user._id,
       name: student.name,
       rollNumber: student.rollNumber,
-      answers: resultAnswers, // ✅ linked answers
+      answers: resultAnswers, // ❌ no question reference
       score,
       totalQuestions: questions.length,
       percentage: ((score / questions.length) * 100).toFixed(2),
     });
 
     await result.save();
-    res.json({ message: "✅ Test submitted successfully", result });
+    res.json({ message: "Test submitted", result });
   } catch (err) {
-    console.error("Submit Error:", err);
     res.status(500).json({ message: err.message });
   }
 });
+
 
 
 // 📘 Fetch student’s test review (after submission)
