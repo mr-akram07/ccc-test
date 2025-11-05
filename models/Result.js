@@ -1,18 +1,30 @@
 import mongoose from "mongoose";
 
-const resultSchema = new mongoose.Schema({
-  student: {
+const answerSchema = new mongoose.Schema({
+  question: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
+    ref: "Question", // ✅ Links each answer to its Question document
     required: true,
   },
-  name: { type: String, required: true },
-  rollNumber: { type: String, required: true },
-  answers: { type: Array, required: true },
-  score: { type: Number, required: true },
-  totalQuestions: { type: Number, required: true },
-  percentage: { type: Number, required: true },
-  submittedAt: { type: Date, default: Date.now },
+  selectedAnswer: { type: String, required: true },
+  isCorrect: { type: Boolean, default: false },
 });
+
+const resultSchema = new mongoose.Schema(
+  {
+    student: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    name: { type: String, required: true },
+    rollNumber: { type: String, required: true },
+    answers: [answerSchema], // ✅ Uses sub-schema
+    score: { type: Number, required: true },
+    totalQuestions: { type: Number, required: true },
+    percentage: { type: Number, required: true },
+  },
+  { timestamps: true }
+);
 
 export default mongoose.model("Result", resultSchema);

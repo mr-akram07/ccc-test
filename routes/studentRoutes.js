@@ -18,21 +18,46 @@ router.get("/questions", async (req, res) => {
 // 🧾 Save student test result (with auth)
 router.post("/submit", protect, async (req, res) => {
   try {
-    const { name, rollNumber, answers, score, totalQuestions, percentage } = req.body;
-    const result = await Result.create({
-      student: req.user._id,
-      name,
-      rollNumber,
-      answers,
-      score,
-      totalQuestions,
-      percentage,
+    const { answers } = req.body;
+    const student = await User.findById(req.user._id);
+    const questions = await Question.find();
+
+    if (!questions.length) {
+      return res.status(400).json({ message: "No questions available" });
+    }
+
+    let score = 0;
+
+    // ✅ Create answer array with linked question IDs
+    const resultAnswers = questions.map((q, index) => {
+      const selected = answers[index];
+      const isCorrect = selected === q.correctAnswer;
+      if (isCorrect) score++;
+      return {
+        question: q._id, // ✅ links to the actual Question
+        selectedAnswer: selected,
+        isCorrect,
+      };
     });
-    res.status(201).json({ message: "Result saved successfully", result });
+
+    const result = new Result({
+      student: req.user._id,
+      name: student.name,
+      rollNumber: student.rollNumber,
+      answers: resultAnswers, // ✅ linked answers
+      score,
+      totalQuestions: questions.length,
+      percentage: ((score / questions.length) * 100).toFixed(2),
+    });
+
+    await result.save();
+    res.json({ message: "✅ Test submitted successfully", result });
   } catch (err) {
+    console.error("Submit Error:", err);
     res.status(500).json({ message: err.message });
   }
 });
+
 
 // 📘 Fetch student’s test review (after submission)
 router.get("/review", protect, async (req, res) => {
