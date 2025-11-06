@@ -1,21 +1,28 @@
+// server/routes/studentRoutes.js
 import express from "express";
 import Result from "../models/Result.js";
 import Question from "../models/Question.js";
+import User from "../models/user.js";
 import { protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-// 📘 Public route for students to get questions (no auth)
+/* -----------------------------------
+   📘 GET QUESTIONS (Public)
+------------------------------------ */
 router.get("/questions", async (req, res) => {
   try {
-    const questions = await Question.find({}, { correctAnswer: 0 }); // hides correct answers
+    const questions = await Question.find({}, { correctAnswer: 0 }); // hide correct answers
     res.json(questions);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("Fetch questions error:", err);
+    res.status(500).json({ message: "Server error while fetching questions" });
   }
 });
 
-// 🧾 Save student test result (with auth)
+/* -----------------------------------
+   🧾 SUBMIT TEST (Protected)
+------------------------------------ */
 router.post("/submit", protect, async (req, res) => {
   try {
     const { answers } = req.body;
@@ -27,27 +34,36 @@ router.post("/submit", protect, async (req, res) => {
     const questions = await Question.find();
 
     if (!questions.length) {
-      return res.status(400).json({ message: "No questions found" });
+      return res.status(400).json({ message: "No questions available" });
     }
 
     let score = 0;
     const totalQuestions = questions.length;
 
-    // ✅ Attach each question's ID to the result
-    const resultAnswers = questions.map((q, index) => {
-      const selected = answers[index];
-      const isCorrect = selected === q.correctAnswer;
+    // build result answers
+    const resultAnswers = questions.map((q, i) => {
+      const selectedIndex = answers[i];
+      const correctIndex =
+        typeof q.correctAnswerIndex === "number"
+          ? q.correctAnswerIndex
+          : q.options.findIndex((o) => o === q.correctAnswer);
+
+      const isCorrect = selectedIndex === correctIndex;
       if (isCorrect) score++;
+
       return {
         question: q._id,
-        selectedAnswer: selected,
+        selectedAnswer:
+          typeof selectedIndex === "number" && q.options[selectedIndex]
+            ? q.options[selectedIndex]
+            : null,
         isCorrect,
       };
     });
 
     const percentage = Math.round((score / totalQuestions) * 100);
 
-    const newResult = new Result({
+    const result = new Result({
       student: student._id,
       name: student.name,
       rollNumber: student.rollNumber,
@@ -57,7 +73,8 @@ router.post("/submit", protect, async (req, res) => {
       percentage,
     });
 
-    await newResult.save();
+    await result.save();
+
     res.status(201).json({
       message: "✅ Test submitted successfully",
       score,
@@ -65,38 +82,42 @@ router.post("/submit", protect, async (req, res) => {
       percentage,
     });
   } catch (err) {
-    console.error("Error submitting test:", err);
-    res.status(500).json({ message: "Server error", error: err.message });
+    console.error("Submit test error:", err);
+    res.status(500).json({ message: "Server error while submitting test" });
   }
 });
 
-
-// 📘 Fetch student’s test review (after submission)
+/* -----------------------------------
+   📋 REVIEW TEST (Protected)
+------------------------------------ */
 router.get("/review", protect, async (req, res) => {
   try {
-    const result = await Result.findOne({ student: req.user._id }).sort({ submittedAt: -1 });
-    if (!result) return res.status(404).json({ message: "No result found" });
+    const result = await Result.findOne({ student: req.user._id }).populate(
+      "answers.question"
+    );
 
-    const questions = await Question.find();
+    if (!result) {
+      return res.status(404).json({ message: "No test result found" });
+    }
 
-    // Merge with answers and mark correctness
-    const review = questions.map((q, index) => {
-      const userAnswer = result.answers[index];
-      const isCorrect = userAnswer === q.correctAnswer;
-      return {
-        questionText: q.questionText,
-        options: q.options,
-        correctAnswer: q.correctAnswer,
-        userAnswer,
-        isCorrect,
-      };
+    const review = result.answers.map((a) => ({
+      questionText: a.question?.questionText || "Question not found",
+      options: a.question?.options || [],
+      correctAnswer: a.question?.correctAnswer,
+      userAnswer: a.selectedAnswer,
+      isCorrect: a.isCorrect,
+    }));
+
+    res.json({
+      score: result.score,
+      totalQuestions: result.totalQuestions,
+      percentage: result.percentage,
+      review,
     });
-
-    res.json({ result, review });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("Review fetch error:", err);
+    res.status(500).json({ message: "Server error while loading review" });
   }
 });
-
 
 export default router;
