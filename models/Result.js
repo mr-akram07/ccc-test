@@ -6,7 +6,8 @@ const answerSchema = new mongoose.Schema({
     ref: "Question", // ✅ Links each answer to its Question document
     required: true,
   },
-  selectedAnswer: { type: String, required: true },
+  // 🔧 Allow unattempted questions (no selected answer)
+  selectedAnswer: { type: String, required: false, default: null },
   isCorrect: { type: Boolean, default: false },
 });
 

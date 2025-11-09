@@ -26,8 +26,9 @@ router.get("/questions", async (req, res) => {
 router.post("/submit", protect, async (req, res) => {
   try {
     const { answers } = req.body;
-    if (!answers || !Array.isArray(answers)) {
-      return res.status(400).json({ message: "Invalid answers data" });
+
+    if (!Array.isArray(answers)) {
+      return res.status(400).json({ message: "Invalid answers format" });
     }
 
     const student = await User.findById(req.user._id);
@@ -40,21 +41,27 @@ router.post("/submit", protect, async (req, res) => {
     let score = 0;
     const totalQuestions = questions.length;
 
-    // build result answers
     const resultAnswers = questions.map((q, i) => {
-      const selectedIndex = answers[i];
+      // 🔒 Always protect against out-of-bounds and bad types
+      const selectedIndex =
+        typeof answers[i] === "number" &&
+        answers[i] >= 0 &&
+        answers[i] < (q.options?.length || 0)
+          ? answers[i]
+          : null;
+
       const correctIndex =
         typeof q.correctAnswerIndex === "number"
           ? q.correctAnswerIndex
-          : q.options.findIndex((o) => o === q.correctAnswer);
+          : q.options?.findIndex((o) => o === q.correctAnswer) ?? -1;
 
-      const isCorrect = selectedIndex === correctIndex;
+      const isCorrect = selectedIndex !== null && selectedIndex === correctIndex;
       if (isCorrect) score++;
 
       return {
         question: q._id,
         selectedAnswer:
-          typeof selectedIndex === "number" && q.options[selectedIndex]
+          selectedIndex !== null && q.options?.[selectedIndex]
             ? q.options[selectedIndex]
             : null,
         isCorrect,
@@ -82,10 +89,11 @@ router.post("/submit", protect, async (req, res) => {
       percentage,
     });
   } catch (err) {
-    console.error("Submit test error:", err);
-    res.status(500).json({ message: "Server error while submitting test" });
+    console.error("❌ Submit test error:", err);
+    return res.status(500).json({ message: err.message || "Server error while submitting test" });
   }
 });
+
 
 /* -----------------------------------
    📋 REVIEW TEST (Protected)
